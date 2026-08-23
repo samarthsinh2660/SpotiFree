@@ -5,3 +5,6 @@ data/*.db
 .env
 next-env.d.ts
 tools/*.log
+
+# build artifact, should never have been tracked
+*.tsbuildinfo
