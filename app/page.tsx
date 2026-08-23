@@ -13,6 +13,20 @@ type Track = {
 
 type Notice = { text: string; kind: 'error' | 'info' } | null;
 
+/** Mirrors lib/spotify.ts — tells us whether retrying could ever help. */
+type ErrorCode = 'quota' | 'rate_limit' | 'config' | 'not_found' | 'upstream';
+
+class ApiError extends Error {
+  code: ErrorCode;
+  constructor(message: string, code: ErrorCode) {
+    super(message);
+    this.code = code;
+  }
+}
+
+/** Advancing to the next track cannot fix these — every track would fail too. */
+const HALTING = new Set<ErrorCode>(['quota', 'rate_limit', 'config']);
+
 type SavedPlaylist = {
   id: string;
   name: string;
@@ -99,7 +113,7 @@ export default function Page() {
     const job = fetch(`/api/resolve?${params}`)
       .then(async (res) => {
         const body = await res.json();
-        if (!res.ok) throw new Error(body.error || 'resolve failed');
+        if (!res.ok) throw new ApiError(body.error || 'Could not resolve track', body.code || 'upstream');
         return body.videoId as string;
       })
       .catch((err) => {
@@ -126,9 +140,18 @@ export default function Page() {
 
       // Warm the next track so playback does not stall at the gap.
       const next = tracksRef.current[orderRef.current[cursorRef.current + 1]];
-      if (next) resolveTrack(next).catch(() => {});
+      if (next) resolveTrack(next).catch(() => {});   // speculative: failures surface when played
       refreshQuota();
     } catch (err) {
+      const code = err instanceof ApiError ? err.code : 'upstream';
+
+      if (HALTING.has(code)) {
+        // Skipping would fire one doomed request per remaining track.
+        setNotice({ text: (err as Error).message, kind: 'error' });
+        playerRef.current?.pauseVideo?.();
+        return;
+      }
+
       setNotice({ text: `${track.title} — ${(err as Error).message}`, kind: 'error' });
       failedRef.current.add(track.id);
       if (failedRef.current.size < tracksRef.current.length) {
@@ -307,7 +330,7 @@ export default function Page() {
       try {
         const res = await fetch(`/api/playlist?url=${encodeURIComponent(target)}`);
         const data = await res.json();
-        if (!res.ok) throw new Error(data.error);
+        if (!res.ok) throw new ApiError(data.error, data.code || 'upstream');
 
         tracksRef.current = data.tracks;
         failedRef.current.clear();

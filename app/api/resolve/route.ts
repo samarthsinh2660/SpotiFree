@@ -37,6 +37,9 @@ export async function GET(req: NextRequest) {
   } catch (err) {
     const e = err as HttpError;
     if (!e.status) console.error(err);
-    return NextResponse.json({ error: e.message || 'Something went wrong' }, { status: e.status || 500 });
+    return NextResponse.json(
+      { error: e.message || 'Something went wrong', code: e.code || 'upstream' },
+      { status: e.status || 500 }
+    );
   }
 }

@@ -82,7 +82,9 @@ function isoDurationToSeconds(iso: string): number {
 
 export async function findBestMatch(track: Wanted): Promise<Candidate | null> {
   const key = process.env.YOUTUBE_API_KEY;
-  if (!key) throw new HttpError(500, 'YOUTUBE_API_KEY is not set');
+  if (!key) {
+    throw new HttpError(500, 'YOUTUBE_API_KEY is not set on the server.', 'config');
+  }
 
   // Only the lead artist: Spotify credits film music with composers and lyricists
   // first, and feeding those in drags the search toward covers and unplugged sets.
@@ -97,10 +99,7 @@ export async function findBestMatch(track: Wanted): Promise<Candidate | null> {
 
   const res = await fetch(searchUrl, { cache: 'no-store' });
   spendQuota(100);                    // charged whether it succeeds or not
-  if (res.status === 403) {
-    throw new HttpError(429, 'YouTube quota is exhausted for today (~99 new tracks). Cached tracks still play.');
-  }
-  if (!res.ok) throw new HttpError(502, `YouTube search failed (${res.status})`);
+  if (!res.ok) throw await youtubeError(res);
 
   const items: any[] = (await res.json()).items ?? [];
   if (!items.length) return null;
@@ -131,4 +130,45 @@ export async function findBestMatch(track: Wanted): Promise<Candidate | null> {
 
   candidates.sort((a, b) => scoreCandidate(b, track) - scoreCandidate(a, track));
   return candidates[0];
+}
+
+/* Google returns 403 for several unrelated problems — an exhausted quota, a key
+   that is not allowed to call this API, a key restricted to other referrers.
+   The reason code distinguishes them, and each needs a different fix. */
+async function youtubeError(res: Response): Promise<HttpError> {
+  const body = await res.json().catch(() => null);
+  const reason: string = body?.error?.errors?.[0]?.reason ?? '';
+  const detail: string = body?.error?.message ?? '';
+
+  if (reason === 'quotaExceeded' || reason === 'dailyLimitExceeded') {
+    return new HttpError(
+      429,
+      'Daily YouTube quota is used up (about 99 new tracks). Songs already cached still play normally — new ones resolve again after the quota resets at midnight Pacific time.',
+      'quota'
+    );
+  }
+  if (reason === 'rateLimitExceeded' || reason === 'userRateLimitExceeded' || res.status === 429) {
+    return new HttpError(429, 'YouTube is rate-limiting requests. Wait a moment and try again.', 'rate_limit');
+  }
+  if (reason === 'accessNotConfigured') {
+    return new HttpError(
+      500,
+      'YouTube Data API v3 is not enabled for this API key’s Google Cloud project. Enable it in the console, then retry.',
+      'config'
+    );
+  }
+  if (reason === 'keyInvalid' || reason === 'badRequest' || res.status === 400) {
+    return new HttpError(500, `The YouTube API key is invalid or restricted. ${detail}`.trim(), 'config');
+  }
+  if (reason === 'ipRefererBlocked') {
+    return new HttpError(
+      500,
+      'This API key is restricted and does not allow requests from this server. Loosen the key restrictions in Google Cloud.',
+      'config'
+    );
+  }
+  if (res.status >= 500) {
+    return new HttpError(502, 'YouTube is having trouble right now. Try again shortly.', 'upstream');
+  }
+  return new HttpError(502, `YouTube search failed (${res.status}). ${detail}`.trim(), 'upstream');
 }

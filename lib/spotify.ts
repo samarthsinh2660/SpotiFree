@@ -15,11 +15,16 @@ export type Playlist = {
   tracks: Track[];
 };
 
+/** `code` lets the client react to the *kind* of failure, not just the text. */
+export type ErrorCode = 'quota' | 'rate_limit' | 'config' | 'not_found' | 'upstream';
+
 export class HttpError extends Error {
   status: number;
-  constructor(status: number, message: string) {
+  code: ErrorCode;
+  constructor(status: number, message: string, code: ErrorCode = 'upstream') {
     super(message);
     this.status = status;
+    this.code = code;
   }
 }
 
@@ -48,8 +53,21 @@ export async function fetchPlaylist(id: string): Promise<Playlist> {
     cache: 'no-store',
   });
 
-  if (res.status === 404) throw new HttpError(404, 'No such playlist — check the link.');
-  if (!res.ok) throw new HttpError(502, `Spotify returned ${res.status}`);
+  if (res.status === 404) {
+    throw new HttpError(404, 'No such playlist — check the link.', 'not_found');
+  }
+  if (res.status === 429) {
+    const wait = res.headers.get('retry-after');
+    throw new HttpError(
+      429,
+      `Spotify is rate-limiting this server. Wait ${wait ? `${wait} seconds` : 'a minute'} and try again.`,
+      'rate_limit'
+    );
+  }
+  if (res.status >= 500) {
+    throw new HttpError(502, 'Spotify is having trouble right now. Try again shortly.', 'upstream');
+  }
+  if (!res.ok) throw new HttpError(502, `Spotify returned ${res.status}.`, 'upstream');
 
   const html = await res.text();
   const blob = html.match(/<script id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/);
@@ -59,7 +77,7 @@ export async function fetchPlaylist(id: string): Promise<Playlist> {
 
   const entity = JSON.parse(blob[1])?.props?.pageProps?.state?.data?.entity;
   if (!entity?.trackList) {
-    throw new HttpError(404, 'That playlist is private or empty. It must be public to load.');
+    throw new HttpError(404, 'That playlist is private or empty. It must be public to load.', 'not_found');
   }
 
   const sources = entity.coverArt?.sources ?? [];
