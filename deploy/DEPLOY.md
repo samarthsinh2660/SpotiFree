@@ -1,7 +1,11 @@
-# Deploying to spotifree.billappreward.sbs
+# Deploying to spotifree.billappreward.sbs (Docker)
 
-The VPS already runs nginx and an Express app on the root domain. Nothing below
-touches that app: new subdomain, new port, new nginx file, new pm2 process.
+The VPS already runs nginx plus an existing app in Docker on port 3000. Nothing
+below touches that app: new subdomain, new port (3001), new container, new nginx
+file.
+
+Docker also removes the Node version problem entirely — the image pins Node 24
+internally, so the host needs no Node at all.
 
 ## 1. DNS (free)
 
@@ -11,64 +15,49 @@ Hostinger hPanel → **Domains → DNS Zone Editor** for `billappreward.sbs`:
 | ---- | ----------- | ----------------- | ----- |
 | A    | `spotifree` | `187.127.153.212` | 14400 |
 
-Name is just `spotifree`, not the full domain. Propagation is usually minutes.
-Verify: `dig +short spotifree.billappreward.sbs` should return the IP.
-
-## 2. Check Node on the server
-
-`node:sqlite` requires **Node ≥ 22.5**. The existing Express app may well be on an
-older version — check before anything else:
+Name is just `spotifree`, not the full domain. Verify:
 
 ```bash
-node -v
+dig +short spotifree.billappreward.sbs      # should print the IP
 ```
 
-If it is below 22.5, install a newer Node *without* disturbing the running app:
+## 2. Ship the code
 
 ```bash
-curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash
-source ~/.bashrc
-nvm install 24
-nvm alias default 24
-```
-
-Restart the other app only if you deliberately want it on the new version.
-
-## 3. Pick a free port
-
-The root app is probably on 3000. Confirm what is taken:
-
-```bash
-ss -tlnp | grep -E ':(3000|3001|3002)'
-```
-
-These instructions use **3001**. If it is occupied, choose another and change it
-in both the pm2 command and `deploy/nginx-spotifree.conf`.
-
-## 4. Deploy the app
-
-```bash
-cd /var/www                     # or wherever you keep apps
-git clone <your-repo> spotifree # or scp the folder up
-cd spotifree
-
+mkdir -p /opt/spotifree && cd /opt/spotifree
+git clone <your-repo> .        # or scp the folder up
 echo "YOUTUBE_API_KEY=your_key_here" > .env
-echo "PORT=3001"                    >> .env
-
-npm install
-npm run build
-
-npm i -g pm2
-pm2 start "npm start" --name spotifree
-pm2 save
-pm2 startup                     # run the command it prints, to survive reboots
 ```
 
-The SQLite file lives at `data/cache.db` inside the project. It persists across
-restarts and deploys — just do not delete the folder, and exclude it from any
-deploy script that wipes the directory.
+`docker-compose.yml` reads `YOUTUBE_API_KEY` from that `.env`.
 
-## 5. nginx + free SSL
+## 3. Build and run
+
+```bash
+docker compose up -d --build
+docker compose logs -f          # ctrl-C once you see "Ready"
+curl -s localhost:3001/api/quota
+```
+
+The container binds to **127.0.0.1:3001** only — not reachable from the internet
+except through nginx, so the password gate cannot be bypassed by hitting the port.
+
+`restart: unless-stopped` brings it back automatically after a reboot.
+
+### Where the data lives
+
+The named volume `spotifree-data` holds `/app/data/cache.db`: the YouTube track
+cache **and** your saved playlists. It survives `docker compose down`, rebuilds,
+and image updates — verified by destroying the container and recreating it.
+
+Only `docker volume rm spotifree-data` deletes it. Back it up with:
+
+```bash
+docker run --rm -v spotifree-data:/d -v $(pwd):/b alpine \
+  tar czf /b/spotifree-backup.tar.gz -C /d .
+```
+
+## 4. nginx + free SSL
 
 ```bash
 sudo cp deploy/nginx-spotifree.conf /etc/nginx/sites-available/spotifree
@@ -84,24 +73,25 @@ sudo systemctl reload nginx
 sudo certbot --nginx -d spotifree.billappreward.sbs
 ```
 
-`certbot` is free, issues a Let's Encrypt certificate, edits the file to add TLS,
-and auto-renews. If certbot is missing: `sudo apt install -y certbot python3-certbot-nginx`.
+`nginx -t` is the safety check: if it fails, do **not** reload — the running app
+on the root domain keeps serving on the old config until you fix the error.
+
+certbot is free, auto-renews, and edits only the spotifree file. If missing:
+`sudo apt install -y certbot python3-certbot-nginx`.
 
 Then open **https://spotifree.billappreward.sbs**.
-
-## Why the password matters
-
-Anyone who opens the URL spends *your* YouTube quota — about 99 new tracks per
-day, shared across every visitor. Cached tracks keep playing once it runs out,
-but new songs stop resolving until midnight Pacific. The basic-auth line costs
-nothing and removes the problem entirely.
 
 ## Updating later
 
 ```bash
-cd /var/www/spotifree
+cd /opt/spotifree
 git pull
-npm install
-npm run build
-pm2 restart spotifree
+docker compose up -d --build    # volume, and therefore all data, is untouched
 ```
+
+## Why the password matters
+
+Anyone who opens the URL spends *your* YouTube quota — about 99 new tracks per
+day shared across all visitors. Cached tracks keep playing once it is gone, but
+new songs stop resolving until it resets. Basic auth costs nothing and removes
+the problem.
