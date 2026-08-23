@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: spotifree
+    runtime: node
+    plan: starter          # a Disk requires a paid instance; on free, cache resets each deploy
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_VERSION
+        value: "24"
+      - key: YOUTUBE_API_KEY
+        sync: false        # set this in the Render dashboard, never commit it
+      - key: DB_PATH
+        value: /var/data/cache.db
+    disk:
+      name: cache
+      mountPath: /var/data
+      sizeGB: 1

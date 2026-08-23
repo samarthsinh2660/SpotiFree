@@ -1,0 +1,199 @@
+:root {
+  --green: #1db954;
+  --green-bright: #1ed760;
+  --bg: #000;
+  --panel: #121212;
+  --panel-hi: #1a1a1a;
+  --bar: #181818;
+  --line: #282828;
+  --text: #fff;
+  --muted: #a7a7a7;
+  --dim: #6a6a6a;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Circular', -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ------------------------------------------------------------------ shell */
+
+.shell { flex: 1; overflow-y: auto; padding: 0 0 140px; }
+
+.hero {
+  background: linear-gradient(180deg, #1f3d2b 0%, var(--panel) 90%);
+  padding: 56px 40px 28px;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--green);
+  margin-bottom: 26px;
+}
+
+.brand svg { width: 22px; height: 22px; fill: var(--green); }
+
+h1 { font-size: clamp(28px, 5vw, 46px); font-weight: 800; letter-spacing: -0.02em; }
+.sub { color: var(--muted); margin-top: 10px; font-size: 14px; }
+
+/* ------------------------------------------------------------------- form */
+
+.loader { display: flex; gap: 10px; margin-top: 26px; max-width: 720px; flex-wrap: wrap; }
+
+input[type="text"] {
+  flex: 1;
+  min-width: 260px;
+  background: var(--panel-hi);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 13px 20px;
+  color: var(--text);
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+input[type="text"]:focus { border-color: var(--green); }
+input[type="text"]::placeholder { color: var(--dim); }
+
+button.primary {
+  background: var(--green);
+  color: #000;
+  border: 0;
+  border-radius: 999px;
+  padding: 13px 30px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 0.12s, background 0.15s;
+}
+button.primary:hover:not(:disabled) { background: var(--green-bright); transform: scale(1.04); }
+button.primary:disabled { opacity: 0.45; cursor: default; }
+
+.notice {
+  margin: 18px 40px 0;
+  padding: 13px 18px;
+  border-radius: 8px;
+  font-size: 13.5px;
+  line-height: 1.5;
+  display: none;
+}
+.notice.error { display: block; background: rgba(226, 33, 52, 0.12); border: 1px solid rgba(226, 33, 52, 0.4); color: #ff9aa5; }
+.notice.info  { display: block; background: rgba(29, 185, 84, 0.1); border: 1px solid rgba(29, 185, 84, 0.35); color: #8fe0ab; }
+
+/* ------------------------------------------------------------------ table */
+
+.listing { padding: 26px 40px 0; }
+
+.listing-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.listing-head h2 { font-size: 20px; font-weight: 700; }
+.quota { font-size: 12px; color: var(--dim); }
+
+.row {
+  display: grid;
+  grid-template-columns: 34px 1fr 90px;
+  align-items: center;
+  gap: 14px;
+  padding: 9px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+.row:hover { background: var(--panel-hi); }
+.row .idx { color: var(--dim); font-size: 14px; font-variant-numeric: tabular-nums; text-align: right; }
+.row .name { font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.row .artist { font-size: 12.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 2px; }
+.row .len { color: var(--dim); font-size: 13px; text-align: right; font-variant-numeric: tabular-nums; }
+
+.row.active .name, .row.active .idx { color: var(--green); font-weight: 600; }
+.row.cached .idx::after { content: '·'; color: var(--green); margin-left: 4px; }
+
+/* ------------------------------------------------------------------- dock */
+
+.dock {
+  position: fixed;
+  bottom: 0; left: 0; right: 0;
+  background: var(--bar);
+  border-top: 1px solid var(--line);
+  padding: 12px 20px 14px;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 20px;
+}
+
+.now { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.now .art {
+  width: 52px; height: 52px; border-radius: 4px; flex-shrink: 0;
+  background: var(--panel-hi) center/cover;
+}
+.now .meta { min-width: 0; }
+.now .t { font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.now .a { font-size: 11.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 3px; }
+
+.controls { display: flex; flex-direction: column; align-items: center; gap: 9px; width: min(520px, 46vw); }
+.buttons { display: flex; align-items: center; gap: 20px; }
+
+.ctl {
+  background: none; border: 0; cursor: pointer;
+  color: var(--muted); display: grid; place-items: center;
+  transition: color 0.12s, transform 0.12s;
+}
+.ctl svg { width: 17px; height: 17px; fill: currentColor; }
+.ctl:hover { color: var(--text); }
+.ctl.on { color: var(--green); }
+.ctl.play {
+  background: var(--text); color: #000;
+  width: 38px; height: 38px; border-radius: 50%;
+}
+.ctl.play svg { width: 15px; height: 15px; }
+.ctl.play:hover { transform: scale(1.07); color: #000; }
+
+.scrub { display: flex; align-items: center; gap: 10px; width: 100%; }
+.scrub .time { font-size: 11px; color: var(--dim); font-variant-numeric: tabular-nums; min-width: 36px; }
+.track {
+  flex: 1; height: 4px; background: var(--line);
+  border-radius: 2px; cursor: pointer; position: relative;
+}
+.track .fill { height: 100%; background: var(--muted); border-radius: 2px; width: 0; }
+.track:hover .fill { background: var(--green); }
+
+.right { display: flex; align-items: center; justify-content: flex-end; gap: 12px; }
+.vol { width: 92px; accent-color: var(--green); }
+
+/* The embed must stay rendered for playback to continue, so hiding it means
+   parking it off-screen rather than display:none. */
+#stage {
+  position: fixed;
+  left: -9999px; top: 0;
+  width: 246px; height: 138px;
+  z-index: 5;
+}
+#stage.show { left: auto; top: auto; right: 16px; bottom: 100px; }
+#stage iframe { width: 100%; height: 100%; border: 0; border-radius: 6px; }
+
+@media (max-width: 760px) {
+  .hero { padding: 34px 20px 22px; }
+  .listing { padding: 20px 14px 0; }
+  .notice { margin: 14px 20px 0; }
+  .dock { grid-template-columns: 1fr; gap: 10px; padding: 10px 14px 12px; }
+  .right { display: none; }
+  .controls { width: 100%; }
+}

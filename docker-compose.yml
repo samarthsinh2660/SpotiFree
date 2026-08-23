@@ -1,0 +1,17 @@
+services:
+  spotifree:
+    build: .
+    image: spotifree:latest
+    container_name: spotifree
+    restart: unless-stopped
+    # Bound to loopback only — nginx is the sole way in, so the password gate
+    # cannot be bypassed by hitting the port directly.
+    ports:
+      - "127.0.0.1:3001:3000"
+    environment:
+      - YOUTUBE_API_KEY=${YOUTUBE_API_KEY}
+    volumes:
+      - spotifree-data:/app/data
+
+volumes:
+  spotifree-data:
