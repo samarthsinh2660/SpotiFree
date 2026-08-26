@@ -2,7 +2,7 @@
 
 Paste a public Spotify playlist link and play it. Tracks are matched to YouTube
 once, then cached forever — so the API quota is only ever spent on songs you have
-never played before.
+never played before. 
 
 - **No Spotify account or credentials needed**
 - **Auto-advance** through the playlist, in order or shuffled
